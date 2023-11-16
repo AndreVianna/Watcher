@@ -1,3 +1,3 @@
-﻿namespace Whatch.Domain.Common.Contracts;
+﻿namespace Watch.Common.Contracts;
 public interface IEntity {
 }
