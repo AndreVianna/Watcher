@@ -7,4 +7,8 @@
     <RootNamespace>Watcher</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="$(AssemblyName).UnitTests" />
+  </ItemGroup>
+
 </Project>

@@ -1,0 +1,5 @@
+{
+  "Hub": {
+    "BaseAddress": "https://localhost:5000/"
+  }
+}

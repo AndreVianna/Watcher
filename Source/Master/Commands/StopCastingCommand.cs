@@ -1,4 +1,4 @@
-﻿namespace Watcher.Daemon.Commands;
+﻿namespace Watcher.Master.Commands;
 
 internal class StopCastingCommand : SubCommand {
     public StopCastingCommand()
