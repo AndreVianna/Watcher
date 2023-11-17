@@ -1,3 +1,3 @@
-﻿namespace Watch.ScreenCaptureProvider.Services;
+﻿namespace Watcher.ScreenCaptureProvider.Services;
 internal interface IScreenCaptureService {
 }

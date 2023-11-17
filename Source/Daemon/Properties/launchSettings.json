@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "Watcher.Daemon": {
+      "commandName": "Project",
+      "commandLineArgs": "start casting"
+    },
+    "WSL": {
+      "commandName": "WSL2",
+      "distributionName": ""
+    }
+  }
+}

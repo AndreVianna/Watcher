@@ -1,3 +1,3 @@
-﻿namespace Watch.Common.Contracts;
+﻿namespace Watcher.Common.Contracts;
 public interface IEntity {
 }

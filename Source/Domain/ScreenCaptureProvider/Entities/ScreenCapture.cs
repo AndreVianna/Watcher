@@ -1,3 +1,3 @@
-﻿namespace Watch.ScreenCaptureProvider.Entities;
+﻿namespace Watcher.ScreenCaptureProvider.Entities;
 internal class ScreenCapture {
 }
