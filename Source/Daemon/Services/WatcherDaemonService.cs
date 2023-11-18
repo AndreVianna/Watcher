@@ -5,8 +5,10 @@ public sealed class WatcherDaemonService : BackgroundService {
     private readonly HttpListener _httpListener;
     private bool _isDisposed;
     private readonly int _bufferSize;
+    private readonly IStreamer _streamer;
 
-    public WatcherDaemonService(IConfiguration configuration, ILogger<WatcherDaemonService> logger) {
+    public WatcherDaemonService(IConfiguration configuration, IStreamer streamer, ILogger<WatcherDaemonService> logger) {
+        _streamer = streamer;
         _logger = logger;
         _httpListener = new();
         var baseAddress = IsNotNullOrWhiteSpace(configuration.GetValue<string>("Hub:BaseAddress"));
@@ -25,7 +27,7 @@ public sealed class WatcherDaemonService : BackgroundService {
         _isDisposed = true;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
+    protected override async Task ExecuteAsync(CancellationToken ct) {
         try {
             _logger.LogInformation("Service is starting.");
             _httpListener.Start();
@@ -33,8 +35,8 @@ public sealed class WatcherDaemonService : BackgroundService {
 
             _logger.LogInformation("Listening on {address}", $"'{string.Join("', '", _httpListener.Prefixes)}'");
 
-            while (!stoppingToken.IsCancellationRequested) {
-                await ProcessRequest();
+            while (!ct.IsCancellationRequested) {
+                await ProcessRequest(ct);
             }
         }
         catch (Exception ex) {
@@ -48,10 +50,10 @@ public sealed class WatcherDaemonService : BackgroundService {
         }
     }
 
-    private async Task ProcessRequest() {
+    private async Task ProcessRequest(CancellationToken ct) {
         var context = await _httpListener.GetContextAsync();
         if (context.Request.IsWebSocketRequest) {
-            await HandleWebSocketAsync(context);
+            await ProcessWebSocketRequest(context, ct);
         }
         else {
             context.Response.StatusCode = 400;
@@ -59,22 +61,32 @@ public sealed class WatcherDaemonService : BackgroundService {
         }
     }
 
-    private async Task HandleWebSocketAsync(HttpListenerContext httpContext) {
+    private async Task ProcessWebSocketRequest(HttpListenerContext httpContext, CancellationToken ct) {
         var webSocketContext = await httpContext.AcceptWebSocketAsync(subProtocol: null);
         using var webSocket = webSocketContext.WebSocket;
 
         var buffer = new byte[_bufferSize];
-        var result = await webSocket.ReceiveAsync(new(buffer), CancellationToken.None);
+        var result = await webSocket.ReceiveAsync(new(buffer), ct);
         while (!result.CloseStatus.HasValue) {
-            await ProcessMessageChunk(buffer);
-            result = await webSocket.ReceiveAsync(new(buffer), CancellationToken.None);
+            await ProcessMessageChunk(buffer.AsSpan()[..result.Count], webSocket, ct);
+            result = await webSocket.ReceiveAsync(new(buffer), ct);
         }
 
-        await webSocket.CloseAsync(result.CloseStatus.Value, result.CloseStatusDescription, CancellationToken.None);
+        await webSocket.CloseAsync(result.CloseStatus.Value, result.CloseStatusDescription, ct);
     }
 
-    private Task ProcessMessageChunk(Span<byte> buffer) {
-        _logger.LogDebug("Received {buffer.Length} byte.", buffer.Length);
-        return Task.CompletedTask;
+    private Task ProcessMessageChunk(Span<byte> buffer, WebSocket webSocket, CancellationToken ct) {
+
+        var message = UTF8.GetString(buffer.ToArray()).Trim().ToLower();
+        switch (message) {
+            case "start":
+                return _streamer.Start(webSocket, ct);
+            case "stop":
+                _streamer.Stop();
+                return Task.CompletedTask;
+            default:
+                _logger.LogWarning("Unrecognized command: {command}", message);
+                return Task.CompletedTask;
+        }
     }
 }

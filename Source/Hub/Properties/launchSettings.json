@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "WSL": {
+      "commandName": "WSL2",
+      "distributionName": ""
+    },
+    "Watcher.Hub": {
+      "commandName": "Project",
+      "commandLineArgs": "list"
+    }
+  }
+}

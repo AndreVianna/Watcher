@@ -15,13 +15,15 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Watcher.Daemon", "Daemon\Watcher.Daemon.csproj", "{895EE414-7A64-4C32-986E-A1386E810EA3}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Watcher.Master", "Master\Watcher.Master.csproj", "{6588BA62-0C08-4D2D-9457-BF737EA7DD10}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Watcher.Master", "Master\Watcher.Master.csproj", "{6588BA62-0C08-4D2D-9457-BF737EA7DD10}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Watcher.Daemon.UnitTests", "Daemon.UnitTests\Watcher.Daemon.UnitTests.csproj", "{05B1F771-9085-4FF8-8214-D669B9EBE61C}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Watcher.Daemon.UnitTests", "Daemon.UnitTests\Watcher.Daemon.UnitTests.csproj", "{05B1F771-9085-4FF8-8214-D669B9EBE61C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Watcher.Master.UnitTests", "Master.UnitTests\Watcher.Master.UnitTests.csproj", "{CF7DC8A9-3D04-47C4-B78E-8A0370C94B39}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Watcher.Master.UnitTests", "Master.UnitTests\Watcher.Master.UnitTests.csproj", "{CF7DC8A9-3D04-47C4-B78E-8A0370C94B39}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Watcher.Domain.UnitTests", "Domain.UnitTests\Watcher.Domain.UnitTests.csproj", "{2F14D86B-070F-4BAA-9876-96EB68B8EF64}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Watcher.Domain.UnitTests", "Domain.UnitTests\Watcher.Domain.UnitTests.csproj", "{2F14D86B-070F-4BAA-9876-96EB68B8EF64}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Watcher.Hub", "Hub\Watcher.Hub.csproj", "{AFC06C0C-9045-479A-BE46-6A8734DCEA0A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -53,6 +55,10 @@ Global
 		{2F14D86B-070F-4BAA-9876-96EB68B8EF64}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2F14D86B-070F-4BAA-9876-96EB68B8EF64}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2F14D86B-070F-4BAA-9876-96EB68B8EF64}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AFC06C0C-9045-479A-BE46-6A8734DCEA0A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AFC06C0C-9045-479A-BE46-6A8734DCEA0A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AFC06C0C-9045-479A-BE46-6A8734DCEA0A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AFC06C0C-9045-479A-BE46-6A8734DCEA0A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
