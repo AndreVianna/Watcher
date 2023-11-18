@@ -3,12 +3,26 @@
 public abstract class Streamer<TSelf> : IStreamer
     where TSelf : IStreamer {
     private readonly ILogger<TSelf> _logger;
+
     private CancellationTokenSource? _cts;
     private Task? _streamingTask;
-    private readonly bool _isDisposed;
+
+    private bool _isDisposed;
 
     protected Streamer(ILogger<TSelf> logger) {
         _logger = logger;
+    }
+
+    protected virtual void Dispose(bool disposing) {
+        if (!disposing) return;
+        Reset();
+    }
+
+    public void Dispose() {
+        if (_isDisposed) return;
+        Dispose(true);
+        GC.SuppressFinalize(this);
+        _isDisposed = true;
     }
 
     public Task Start(WebSocket webSocket, CancellationToken ct) {
@@ -19,7 +33,7 @@ public abstract class Streamer<TSelf> : IStreamer
 
         _logger.LogDebug("Data streaming started.");
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        _streamingTask = SendData(webSocket, _cts.Token);
+        _streamingTask = SendData(webSocket, ct);
 
         return _streamingTask;
     }
@@ -65,16 +79,5 @@ public abstract class Streamer<TSelf> : IStreamer
         _cts = null;
         _streamingTask?.Dispose();
         _streamingTask = null;
-    }
-
-    protected virtual void Dispose(bool disposing) {
-        if (!disposing) return;
-        Reset();
-    }
-
-    public void Dispose() {
-        if (_isDisposed) return;
-        Dispose(true);
-        GC.SuppressFinalize(this);
     }
 }

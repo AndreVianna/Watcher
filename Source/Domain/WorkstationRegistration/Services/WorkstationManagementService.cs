@@ -1,9 +1,7 @@
 ﻿namespace Watcher.WorkstationRegistration.Services;
-internal interface IWorkstationRegistrationService {
-}
 
-internal class WorkstationRegistrationService
-    : IWorkstationRegistrationService {
+public class WorkstationManagementService
+    : IWorkstationManagementService {
 
     private readonly List<Workstation> _workstations = new() {
         new() {
@@ -18,5 +16,5 @@ internal class WorkstationRegistrationService
         },
     };
 
-    public IEnumerable<Workstation> GetAllWorkstations() => _workstations;
+    public IEnumerable<IWorkstation> GetAll() => _workstations.Cast<IWorkstation>();
 }

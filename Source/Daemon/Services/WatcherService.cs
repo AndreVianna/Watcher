@@ -1,13 +1,13 @@
 ﻿namespace Watcher.Daemon.Services;
 
-public sealed class WatcherDaemonService : BackgroundService {
-    private readonly ILogger<WatcherDaemonService> _logger;
+public sealed class WatcherService : BackgroundService {
+    private readonly ILogger<WatcherService> _logger;
     private readonly HttpListener _httpListener;
     private bool _isDisposed;
     private readonly int _bufferSize;
     private readonly IStreamer _streamer;
 
-    public WatcherDaemonService(IConfiguration configuration, IStreamer streamer, ILogger<WatcherDaemonService> logger) {
+    public WatcherService(IConfiguration configuration, IStreamer streamer, ILogger<WatcherService> logger) {
         _streamer = streamer;
         _logger = logger;
         _httpListener = new();
