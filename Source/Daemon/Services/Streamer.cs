@@ -7,25 +7,30 @@ public abstract class Streamer<TSelf> : IStreamer
     private CancellationTokenSource? _cts;
     private Task? _streamingTask;
 
+    private readonly IRemoteConnection _remoteConnection;
+
     private bool _isDisposed;
 
-    protected Streamer(ILogger<TSelf> logger) {
-        _logger = logger;
+    protected Streamer(IConfiguration configuration, ILoggerFactory loggerFactory) {
+        _logger = loggerFactory.CreateLogger<TSelf>();
+        var baseAddress = IsNotNullOrWhiteSpace(configuration.GetValue<string>("Hub:BaseAddress"));
+        _remoteConnection = new RemoteConnection(baseAddress, loggerFactory);
     }
 
-    protected virtual void Dispose(bool disposing) {
+    protected virtual async Task Dispose(bool disposing) {
         if (!disposing) return;
         Reset();
+        await _remoteConnection.DisposeAsync();
     }
 
-    public void Dispose() {
+    public async ValueTask DisposeAsync() {
         if (_isDisposed) return;
-        Dispose(true);
+        await Dispose(true);
         GC.SuppressFinalize(this);
         _isDisposed = true;
     }
 
-    public Task Start(WebSocket webSocket, CancellationToken ct) {
+    public Task Start(CancellationToken ct) {
         if (_streamingTask is not null) {
             _logger.LogDebug("Data streaming is already running.");
             return _streamingTask;
@@ -33,7 +38,7 @@ public abstract class Streamer<TSelf> : IStreamer
 
         _logger.LogDebug("Data streaming started.");
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        _streamingTask = SendData(webSocket, ct);
+        _streamingTask = SendData(ct);
 
         return _streamingTask;
     }
@@ -53,12 +58,14 @@ public abstract class Streamer<TSelf> : IStreamer
         }
     }
 
-    protected abstract Task ProcessData(WebSocket webSocket, CancellationToken ct);
+    protected abstract Task<DataPackage> GetData(CancellationToken ct);
 
-    private async Task SendData(WebSocket webSocket, CancellationToken ct) {
+    private async Task SendData(CancellationToken ct) {
         try {
-            while (!ct.IsCancellationRequested && webSocket.State == WebSocketState.Open) {
-                await ProcessData(webSocket, ct);
+            var package = await GetData(ct);
+            while (!ct.IsCancellationRequested) {
+                await _remoteConnection.SendData(package.Bytes, package.IsEndOfData, ct);
+                package = await GetData(ct);
             }
         }
         catch (OperationCanceledException) {

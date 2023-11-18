@@ -2,85 +2,64 @@
 
 public sealed class WatcherService : BackgroundService {
     private readonly ILogger<WatcherService> _logger;
-    private readonly HttpListener _httpListener;
-    private bool _isDisposed;
-    private readonly int _bufferSize;
-    private readonly IStreamer _streamer;
 
-    public WatcherService(IConfiguration configuration, IStreamer streamer, ILogger<WatcherService> logger) {
-        _streamer = streamer;
+    private readonly IStreamer _streamer;
+    private readonly IListener _listener;
+
+    private bool _isDisposed;
+    private CancellationTokenSource? _cts;
+
+    public WatcherService(IListener listener, IStreamer streamer, ILogger<WatcherService> logger) {
         _logger = logger;
-        _httpListener = new();
-        var baseAddress = IsNotNullOrWhiteSpace(configuration.GetValue<string>("Hub:BaseAddress"));
-        _bufferSize = HasValue(configuration.GetValue<int?>("Hub:MessageBufferSize"));
-        _httpListener.Prefixes.Add(baseAddress);
+        _streamer = streamer;
+        _listener = listener;
     }
 
     public override void Dispose() {
         if (_isDisposed) return;
-        if (_httpListener.IsListening) {
-            _httpListener.Stop();
-            _logger.LogInformation("Service has stopped.");
-        }
-        _httpListener.Close();
+        StopService();
         base.Dispose();
         _isDisposed = true;
+        _logger.LogDebug("Service disposed.");
+    }
+
+    private void StopService() {
+        _cts?.Cancel();
+        _cts = null;
+
+        _listener.Stop().Wait();
+        _logger.LogDebug("Listener has stopped.");
+        _streamer.Stop();
+        _logger.LogDebug("Streamer has stopped.");
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct) {
         try {
-            _logger.LogInformation("Service is starting.");
-            _httpListener.Start();
-            if (!_httpListener.IsListening) throw new InvalidOperationException($"Failed to start listening to '{string.Join("', '", _httpListener.Prefixes)}'.");
-
-            _logger.LogInformation("Listening on {address}", $"'{string.Join("', '", _httpListener.Prefixes)}'");
-
+            _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            _logger.LogDebug("Service is starting.");
+            _listener.OnDataReceived += ProcessRequest;
+            await _listener.Start(ct);
             while (!ct.IsCancellationRequested) {
-                await ProcessRequest(ct);
+                await Task.Delay(100, _cts.Token);
             }
         }
         catch (Exception ex) {
-            _logger.LogError(ex, "Error while listening on {address}", $"'{string.Join("', '", _httpListener.Prefixes)}'");
+            _logger.LogError(ex, "Error while executing service.");
         }
         finally {
-            if (_httpListener.IsListening) {
-                _httpListener.Stop();
-                _logger.LogInformation("Service has stopped.");
-            }
+            StopService();
+            _logger.LogDebug("Service has stopped.");
         }
     }
 
-    private async Task ProcessRequest(CancellationToken ct) {
-        var context = await _httpListener.GetContextAsync();
-        if (context.Request.IsWebSocketRequest) {
-            await ProcessWebSocketRequest(context, ct);
-        }
-        else {
-            context.Response.StatusCode = 400;
-            context.Response.Close();
-        }
-    }
+    private Task ProcessRequest(ArraySegment<byte> data, bool isEndOfData, CancellationToken ct)
+        => isEndOfData ? ProcessMessageChunk(data, ct) : Task.CompletedTask;
 
-    private async Task ProcessWebSocketRequest(HttpListenerContext httpContext, CancellationToken ct) {
-        var webSocketContext = await httpContext.AcceptWebSocketAsync(subProtocol: null);
-        using var webSocket = webSocketContext.WebSocket;
-
-        var buffer = new byte[_bufferSize];
-        var result = await webSocket.ReceiveAsync(new(buffer), ct);
-        while (!result.CloseStatus.HasValue) {
-            await ProcessMessageChunk(buffer.AsSpan()[..result.Count], webSocket, ct);
-            result = await webSocket.ReceiveAsync(new(buffer), ct);
-        }
-
-        await webSocket.CloseAsync(result.CloseStatus.Value, result.CloseStatusDescription, ct);
-    }
-
-    private Task ProcessMessageChunk(Span<byte> buffer, WebSocket webSocket, CancellationToken ct) {
-
-        var message = UTF8.GetString(buffer.ToArray()).Trim().ToLower();
+    private Task ProcessMessageChunk(ReadOnlySpan<byte> data, CancellationToken ct) {
+        var message = UTF8.GetString(data.ToArray()).Trim().ToLower();
         switch (message) {
             case "start":
-                return _streamer.Start(webSocket, ct);
+                return _streamer.Start(ct);
             case "stop":
                 _streamer.Stop();
                 return Task.CompletedTask;

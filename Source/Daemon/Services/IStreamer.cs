@@ -1,6 +1,6 @@
 ﻿namespace Watcher.Daemon.Services;
 
-public interface IStreamer : IDisposable {
-    Task Start(WebSocket webSocket, CancellationToken ct);
+public interface IStreamer : IAsyncDisposable {
+    Task Start(CancellationToken ct);
     void Stop();
 }

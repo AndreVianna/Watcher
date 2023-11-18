@@ -1,4 +1,5 @@
-﻿using Watcher.WorkstationRegistration.ValueObjects;
+﻿using Watcher.Common.ValueObjects;
+using Watcher.WorkstationRegistration.ValueObjects;
 
 namespace Watcher.WorkstationRegistration.Entities;
 

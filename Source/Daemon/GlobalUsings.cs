@@ -9,6 +9,7 @@ global using Microsoft.Extensions.Logging;
 
 global using Serilog;
 
+global using Watcher.Common.ValueObjects;
 global using Watcher.Daemon.Services;
 
 global using static System.Ensure;

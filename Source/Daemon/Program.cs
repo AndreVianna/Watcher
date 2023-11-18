@@ -1,28 +1,24 @@
-﻿Log.Logger = new LoggerConfiguration()
-            .WriteTo.File("logs/watcherdaemon.txt", rollingInterval: RollingInterval.Day)
-            .CreateLogger();
-
-var builder = new ConfigurationBuilder()
-   .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
-
-var configuration = builder.Build();
+﻿var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
 
 var host = Host.CreateDefaultBuilder(args)
-               .UseSerilog(ConfigLogger)
-               .ConfigureServices((_, services) => {
-                   services.AddSingleton<IConfiguration>(configuration);
+               .UseEnvironment(environmentName ?? "Production")
+               .ConfigureAppConfiguration((context, config) => {
+                   config.AddCommandLine(args);
+                   config.AddEnvironmentVariables();
+                   config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+                   config.AddJsonFile($"appsettings.{context.HostingEnvironment.EnvironmentName}.json", optional: true, reloadOnChange: true);
+                   config.AddUserSecrets<Program>();
+               })
+               .ConfigureServices((context, services) => {
+                   services.AddSingleton(context.Configuration);
+                   services.AddLogging();
                    services.AddHostedService<WatcherService>();
                    services.AddSingleton<IStreamer, TextStreamer>();
+                   services.AddSingleton<IListener, Listener>();
                })
+               .UseSerilog((context, config) => config.ReadFrom.Configuration(context.Configuration))
                .Build();
 
-await host.RunAsync();
+var cts = new CancellationTokenSource();
+await host.RunAsync(cts.Token);
 return;
-
-static void ConfigLogger(HostBuilderContext context, LoggerConfiguration logger) {
-    logger.ReadFrom.Configuration(context.Configuration);
-    if (!context.HostingEnvironment.IsProduction()) {
-        logger.WriteTo.Console();
-    }
-    logger.WriteTo.File("logs/watcher.log");
-}

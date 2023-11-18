@@ -1,4 +1,4 @@
-﻿namespace Watcher.WorkstationRegistration.ValueObjects;
+﻿namespace Watcher.Common.ValueObjects;
 
 public sealed class RemoteConnection : IRemoteConnection {
     private readonly ILogger<RemoteConnection> _logger;
@@ -8,8 +8,7 @@ public sealed class RemoteConnection : IRemoteConnection {
     private CancellationTokenSource? _cts;
     private Task? _receivingTask;
 
-    public delegate Task ReceivedDataHandler(ArraySegment<byte> data, bool isEndOfData, CancellationToken ct);
-    public event ReceivedDataHandler? OnReceivedData;
+    public event ReceivedDataHandler? OnDataReceived;
 
     public RemoteConnection(string remoteAddress, ILoggerFactory loggerFactory) {
         _logger = loggerFactory.CreateLogger<RemoteConnection>();
@@ -20,7 +19,7 @@ public sealed class RemoteConnection : IRemoteConnection {
 
     public async ValueTask DisposeAsync() {
         await Disconnect("Dispose");
-        OnReceivedData = null;
+        OnDataReceived = null;
         _webSocket.Dispose();
         _logger.LogDebug("Remote connection to {RemoteAddress} disposed.", _remoteAddress);
     }
@@ -44,6 +43,11 @@ public sealed class RemoteConnection : IRemoteConnection {
         _logger.LogDebug("{RemoteAddress} disconnected.", _remoteAddress);
     }
 
+    public Task SendData(ArraySegment<byte> data, bool isEndOfData, CancellationToken ct) {
+        _logger.LogDebug("Sending data to {RemoteAddress}...", _remoteAddress);
+        return _webSocket.SendAsync(data, WebSocketMessageType.Binary, isEndOfData, ct);
+    }
+
     public Task SendCommand(string command, CancellationToken ct) {
         _logger.LogDebug("Sending command '{Command}' to {RemoteAddress}...", command, _remoteAddress);
         var data = Encoding.UTF8.GetBytes(command);
@@ -62,7 +66,7 @@ public sealed class RemoteConnection : IRemoteConnection {
                     break;
                 }
 
-                OnReceivedData?.Invoke(buffer, result.EndOfMessage, ct);
+                OnDataReceived?.Invoke(buffer, result.EndOfMessage, ct);
             }
         }
         catch (OperationCanceledException) {
