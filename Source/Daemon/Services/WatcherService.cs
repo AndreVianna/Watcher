@@ -2,17 +2,16 @@
 
 public sealed class WatcherService : BackgroundService {
     private readonly ILogger<WatcherService> _logger;
-
-    private readonly IStreamer _streamer;
-    private readonly IListener _listener;
+    private readonly IConfiguration _configuration;
+    private readonly ITcpServer _tcpServer;
 
     private bool _isDisposed;
     private CancellationTokenSource? _cts;
 
-    public WatcherService(IListener listener, IStreamer streamer, ILogger<WatcherService> logger) {
-        _logger = logger;
-        _streamer = streamer;
-        _listener = listener;
+    public WatcherService(IConfiguration configuration, ITcpServer tcpServer, ILoggerFactory loggerFactory) {
+        _logger = loggerFactory.CreateLogger<WatcherService>();
+        _configuration = configuration;
+        _tcpServer = tcpServer;
     }
 
     public override void Dispose() {
@@ -27,24 +26,28 @@ public sealed class WatcherService : BackgroundService {
         _cts?.Cancel();
         _cts = null;
 
-        _listener.Stop().Wait();
-        _logger.LogDebug("Listener has stopped.");
-        _streamer.Stop();
-        _logger.LogDebug("Streamer has stopped.");
+        _tcpServer.StopListening();
+        _logger.LogDebug("Service has stopped.");
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct) {
         try {
             _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             _logger.LogDebug("Service is starting.");
-            _listener.OnDataReceived += ProcessRequest;
-            await _listener.Start(ct);
-            while (!ct.IsCancellationRequested) {
+            var remoteAddress = IsNotNullOrWhiteSpace(_configuration["Hub:BaseAddress"]);
+            _tcpServer.OnDataReceived += ProcessRequest;
+            _tcpServer.StartListening(remoteAddress, true, _cts.Token).FireAndForget(ex => throw ex, ex => throw ex);
+            while (!_cts.IsCancellationRequested) {
                 await Task.Delay(100, _cts.Token);
             }
         }
+        catch (OperationCanceledException ex) {
+            _logger.LogError(ex, "Cancel requested.");
+            throw;
+        }
         catch (Exception ex) {
             _logger.LogError(ex, "Error while executing service.");
+            throw;
         }
         finally {
             StopService();
@@ -52,16 +55,23 @@ public sealed class WatcherService : BackgroundService {
         }
     }
 
-    private Task ProcessRequest(ArraySegment<byte> data, bool isEndOfData, CancellationToken ct)
-        => isEndOfData ? ProcessMessageChunk(data, ct) : Task.CompletedTask;
+    private uint _counter = 1;
+    private Task<DataPackage> GenerateData(CancellationToken _) {
+        _counter = _counter == 31 ? 0 : _counter++;
+        return Task.FromResult(new DataPackage {
+            Bytes = "."u8.ToArray(),
+            IsEndOfData = _counter == 0,
+        });
+    }
 
-    private Task ProcessMessageChunk(ReadOnlySpan<byte> data, CancellationToken ct) {
-        var message = UTF8.GetString(data.ToArray()).Trim().ToLower();
+    private Task ProcessRequest((string RemoteAddress, DataPackage Data) args, CancellationTokenSource cts) {
+        var message = UTF8.GetString(args.Data.Bytes.ToArray()).Trim().ToLower();
         switch (message) {
             case "start":
-                return _streamer.Start(ct);
+                _tcpServer.StartStreaming(args.RemoteAddress, GenerateData, false, cts.Token).FireAndForget(onException: (_, ex) => throw ex);
+                return Task.CompletedTask;
             case "stop":
-                _streamer.Stop();
+                _tcpServer.StopStreaming();
                 return Task.CompletedTask;
             default:
                 _logger.LogWarning("Unrecognized command: {command}", message);

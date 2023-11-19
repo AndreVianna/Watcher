@@ -1,5 +1,4 @@
 ﻿using Watcher.Common.ValueObjects;
-using Watcher.WorkstationRegistration.ValueObjects;
 
 namespace Watcher.WorkstationRegistration.Entities;
 
@@ -8,6 +7,6 @@ public record Workstation : IEntity, IWorkstation {
     public required string Name { get; init; }
     public string? Address { get; init; }
 
-    public IRemoteConnection? OpenConnection(ILoggerFactory loggerFactory)
-        => Address is null ? null : new RemoteConnection(Address, loggerFactory);
+    public ITcpServer CreateServer(ILoggerFactory loggerFactory)
+        => new TcpServer(loggerFactory);
 }
