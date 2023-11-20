@@ -1,5 +1,18 @@
-﻿using Watcher.Master.Commands;
+﻿var builder = new ConfigurationBuilder()
+   .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+var configuration = builder.Build();
 
-MainCommand main = new();
+Log.Logger = new LoggerConfiguration()
+            .ReadFrom.Configuration(configuration)
+            .CreateLogger();
 
-main.Execute(args);
+var services = new ServiceCollection();
+services.AddSingleton<IConfiguration>(configuration);
+services.AddSingleton<ILoggerFactory, LoggerFactory>();
+services.AddSingleton<IWorkstationManagementService, WorkstationManagementService>();
+services.AddLogging(conf => conf.AddSerilog(Log.Logger));
+
+var serviceProvider = services.BuildServiceProvider();
+
+var main = new MainCommand(serviceProvider);
+await main.Execute(args);

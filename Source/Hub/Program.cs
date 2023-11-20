@@ -1,6 +1,4 @@
-﻿using Serilog;
-
-var builder = new ConfigurationBuilder()
+﻿var builder = new ConfigurationBuilder()
    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
 var configuration = builder.Build();
 
@@ -26,13 +24,13 @@ foreach (var workstation in workstations) {
         // Attempt to connect to the daemon
         if (string.IsNullOrWhiteSpace(workstation.Address)) continue;
         var server = workstation.CreateServer(serviceProvider.GetRequiredService<ILoggerFactory>());
-        server.SendData(workstation.Address, "Ping"u8.ToArray(), false, cts.Token);
+        await server.SendData(workstation.Address, "Ping"u8.ToArray(), false, cts.Token);
         Console.WriteLine($"Connected to {workstation.Name} successfully.");
     }
     catch (Exception ex) {
         Console.WriteLine($"Failed to connect to {workstation.Name}: {ex.Message}");
     }
 }
-MainCommand main = new();
 
-main.Execute(args);
+var main = new MainCommand();
+await main.Execute(args);

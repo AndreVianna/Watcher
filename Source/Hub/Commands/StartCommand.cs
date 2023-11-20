@@ -1,6 +1,6 @@
 ﻿namespace Watcher.Hub.Commands;
 
-internal class StartCommand : SubCommand {
+internal class StartCommand : Command<StartCommand> {
     public StartCommand()
         : base("Start", "Start remote streaming process.") {
     }

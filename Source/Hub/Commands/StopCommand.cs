@@ -1,6 +1,6 @@
 ﻿namespace Watcher.Hub.Commands;
 
-internal class StopCommand : SubCommand {
+internal class StopCommand : Command<StopCommand> {
     public StopCommand()
         : base("Stop", "Stop remote streaming process.") {
     }

@@ -1,6 +1,6 @@
 ﻿namespace Watcher.Hub.Commands;
 
-internal class ListCommand : SubCommand {
+internal class ListCommand : Command<ListCommand> {
     public ListCommand()
         : base("List", "List the workstations connected via the watcher.") {
     }
