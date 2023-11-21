@@ -1,6 +1,4 @@
-﻿using Watcher.Common.ValueObjects;
-
-namespace Watcher.WorkstationRegistration.Entities;
+﻿namespace Watcher.WorkstationRegistration.Entities;
 
 public record Workstation : IEntity, IWorkstation {
     public required string Id { get; init; }

@@ -1,6 +1,4 @@
-﻿using Watcher.Common.ValueObjects;
-
-namespace Watcher.WorkstationRegistration.Entities;
+﻿namespace Watcher.WorkstationRegistration.Entities;
 
 public interface IWorkstation {
     string? Address { get; init; }

@@ -1,5 +1,8 @@
-﻿var builder = new ConfigurationBuilder()
-   .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+﻿var environmentName = args.LastOrDefault() == "dev" ? "Development" : Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+
+var builder = new ConfigurationBuilder()
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddJsonFile($"appsettings.{environmentName}.json", optional: true, reloadOnChange: true);
 var configuration = builder.Build();
 
 Log.Logger = new LoggerConfiguration()

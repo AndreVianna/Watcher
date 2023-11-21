@@ -1,9 +1,11 @@
-﻿namespace Watcher.Common.ValueObjects;
+﻿using System.Text.Json;
+
+namespace Watcher.Common.ValueObjects;
 
 public sealed class TcpServer : ITcpServer {
     private readonly ILogger<TcpServer> _logger;
 
-    private TcpListener _server = default!;
+    private TcpListener? _server;
     private CancellationTokenSource _listeningControl = new();
     private CancellationTokenSource _streamingControl = new();
 
@@ -11,9 +13,11 @@ public sealed class TcpServer : ITcpServer {
     public event AsyncEventHandler? OnListeningStarted;
     public event AsyncEventHandler<string>? OnClientConnected;
     public event AsyncEventHandler<string>? OnStreamingStarted;
-    public event AsyncEventHandler<(string, DataPackage)>? OnDataReceived;
-    public event AsyncEventHandler<(string, DataPackage)>? OnDataSent;
-    public event AsyncEventHandler<(string, DataPackage)>? OnDataStreamed;
+    public event AsyncEventHandler<(string, DataBlock?)>? OnDataReceived;
+    public event AsyncEventHandler<(string, DataBlock)>? OnDataStreamed;
+    public event AsyncEventHandler<(string, object)>? OnDataSent;
+    public event AsyncEventHandler<(string, object)>? OnRequestSent;
+    public event AsyncEventHandler<(string, object?)>? OnResponseReceived;
     public event Action? OnStreamingStopped;
     public event Action? OnListeningStopped;
     public event Action? OnServerStopped;
@@ -44,7 +48,7 @@ public sealed class TcpServer : ITcpServer {
             if (IsListening) return;
             Start(localAddress);
             _listeningControl = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            _logger.LogDebug("Start listening at {ServerAddress}...", _server.Server.LocalEndPoint);
+            _logger.LogDebug("Start listening at {ServerAddress}...", _server!.Server.LocalEndPoint);
             await CallAsyncEvents(OnListeningStarted, _listeningControl);
             IsListening = true;
             while (!_listeningControl.IsCancellationRequested) {
@@ -53,10 +57,10 @@ public sealed class TcpServer : ITcpServer {
             }
         }
         catch (OperationCanceledException) {
-            _logger.LogDebug("Listening at {ServerAddress} has stopped.", _server.Server.LocalEndPoint);
+            _logger.LogDebug("Listening at {ServerAddress} has stopped.", _server!.Server.LocalEndPoint);
         }
         catch (Exception ex) {
-            _logger.LogError(ex, "Error occurred while listening at {ServerAddress}...", _server.Server.LocalEndPoint);
+            _logger.LogError(ex, "Error occurred while listening at {ServerAddress}...", _server!.Server.LocalEndPoint);
             if (stopServerOnError) {
                 Stop();
                 throw;
@@ -65,7 +69,7 @@ public sealed class TcpServer : ITcpServer {
         finally {
             IsListening = false;
             OnListeningStopped?.Invoke();
-            _logger.LogDebug("Listening at {ServerAddress} stopped.", _server.Server.LocalEndPoint);
+            _logger.LogDebug("Listening at {ServerAddress} stopped.", _server!.Server.LocalEndPoint);
         }
     }
 
@@ -80,7 +84,7 @@ public sealed class TcpServer : ITcpServer {
                 if (!stream.DataAvailable) continue;
                 var buffer = new byte[remoteClient.Available];
                 var size = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), clientConnectionControl.Token);
-                var data = new DataPackage() {
+                var data = new DataBlock() {
                     Bytes = buffer[..size],
                     IsEndOfData = !stream.DataAvailable,
                 };
@@ -105,17 +109,19 @@ public sealed class TcpServer : ITcpServer {
         _listeningControl.Cancel();
     }
 
-    public async Task SendData(string remoteAddress, byte[] data, bool stopServerOnError, CancellationToken ct) {
+    public async Task SendData<TData>(string remoteAddress, TData data, bool stopServerOnError, CancellationToken ct)
+        where TData : notnull {
         try {
             var remoteUri = new Uri(remoteAddress);
             _logger.LogDebug("Sending data to {RemoteAddress}...", remoteAddress);
             var sendDataControl = CancellationTokenSource.CreateLinkedTokenSource(ct);
             using var client = new TcpClient();
-            await client.ConnectAsync(IPAddress.Parse(remoteAddress), remoteUri.Port, sendDataControl.Token);
+            await client.ConnectAsync(IPAddress.Parse(remoteUri.Host), remoteUri.Port, sendDataControl.Token);
             await using var stream = client.GetStream();
-            await stream.WriteAsync(data.AsMemory(), sendDataControl.Token);
-            var eventArgs = (remoteAddress, new DataPackage {
-                Bytes = data,
+            var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data));
+            await stream.WriteAsync(bytes.AsMemory(), sendDataControl.Token);
+            var eventArgs = (remoteAddress, new DataBlock {
+                Bytes = bytes,
                 IsEndOfData = true,
             });
             await CallAsyncEvents(OnDataSent, eventArgs, sendDataControl);
@@ -134,7 +140,7 @@ public sealed class TcpServer : ITcpServer {
     }
 
     public bool IsStreaming { get; private set; }
-    public async Task StartStreaming(string remoteAddress, Func<CancellationToken, Task<DataPackage>> getData, bool stopOnError, CancellationToken ct) {
+    public async Task StartStreaming(string remoteAddress, Func<CancellationToken, Task<DataBlock>> getData, bool stopOnError, CancellationToken ct) {
         try {
             var remoteUri = new Uri(remoteAddress);
             if (IsStreaming) return;
@@ -142,7 +148,7 @@ public sealed class TcpServer : ITcpServer {
             _streamingControl = CancellationTokenSource.CreateLinkedTokenSource(ct);
             _logger.LogDebug("Start streaming data to {RemoteAddress}...", remoteAddress);
             using var client = new TcpClient();
-            await client.ConnectAsync(IPAddress.Parse(remoteAddress), remoteUri.Port, _streamingControl.Token);
+            await client.ConnectAsync(IPAddress.Parse(remoteUri.Host), remoteUri.Port, _streamingControl.Token);
             await CallAsyncEvents(OnStreamingStarted, remoteAddress, _listeningControl);
             await using var stream = client.GetStream();
             while (!_streamingControl.IsCancellationRequested) {
@@ -182,11 +188,13 @@ public sealed class TcpServer : ITcpServer {
     }
 
     private void Stop() {
-        _logger.LogDebug("Stopping server at {RemoteAddress}...", _server.Server.LocalEndPoint);
         StopListening();
         StopStreaming();
-        _server.Stop();
-        OnServerStopped?.Invoke();
+        if (_server is not null) {
+            _logger.LogDebug("Stopping server at {ServerAddress}...", _server.Server.LocalEndPoint);
+            _server.Stop();
+            OnServerStopped?.Invoke();
+        }
         _logger.LogDebug("Server stopped.");
     }
 

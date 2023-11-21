@@ -34,9 +34,9 @@ public sealed class WatcherService : BackgroundService {
         try {
             _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             _logger.LogDebug("Service is starting.");
-            var remoteAddress = IsNotNullOrWhiteSpace(_configuration["Hub:BaseAddress"]);
+            var serverAddress = IsNotNullOrWhiteSpace(_configuration["Watcher:BaseAddress"]);
             _tcpServer.OnDataReceived += ProcessRequest;
-            _tcpServer.StartListening(remoteAddress, true, _cts.Token).FireAndForget(ex => throw ex, ex => throw ex);
+            _tcpServer.StartListening(serverAddress, true, _cts.Token).FireAndForget(ex => throw ex, ex => throw ex);
             while (!_cts.IsCancellationRequested) {
                 await Task.Delay(100, _cts.Token);
             }
@@ -56,15 +56,15 @@ public sealed class WatcherService : BackgroundService {
     }
 
     private uint _counter = 1;
-    private Task<DataPackage> GenerateData(CancellationToken _) {
+    private Task<DataBlock> GenerateData(CancellationToken _) {
         _counter = _counter == 31 ? 0 : _counter++;
-        return Task.FromResult(new DataPackage {
+        return Task.FromResult(new DataBlock {
             Bytes = "."u8.ToArray(),
             IsEndOfData = _counter == 0,
         });
     }
 
-    private Task ProcessRequest((string RemoteAddress, DataPackage Data) args, CancellationTokenSource cts) {
+    private Task ProcessRequest((string RemoteAddress, DataBlock Data) args, CancellationTokenSource cts) {
         var message = UTF8.GetString(args.Data.Bytes.ToArray()).Trim().ToLower();
         switch (message) {
             case "start":

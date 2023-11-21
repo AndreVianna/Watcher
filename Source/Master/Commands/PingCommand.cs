@@ -1,4 +1,4 @@
-﻿using Watcher.Common.ValueObjects;
+﻿using static DotNetToolbox.Ensure;
 
 namespace Watcher.Master.Commands;
 
@@ -13,6 +13,8 @@ internal class PingCommand : Command<PingCommand> {
 
     private Task Execute() {
         var server = new TcpServer(_services.GetRequiredService<ILoggerFactory>());
-        return server.SendData("127.0.0.1:5000", "Ping"u8.ToArray(), false, default);
+        var configuration = _services.GetRequiredService<IConfiguration>();
+        var address = IsNotNull(configuration["Watcher:BaseAddress"]);
+        return server.SendData(address, "Ping"u8.ToArray(), false, default);
     }
 }

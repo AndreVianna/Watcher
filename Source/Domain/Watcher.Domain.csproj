@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNetToolbox.Core" Version="7.0.0" />
+    <PackageReference Include="DotNetToolbox.Core" Version="7.0.1" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
   </ItemGroup>
 

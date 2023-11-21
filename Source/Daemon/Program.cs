@@ -1,4 +1,4 @@
-﻿var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+﻿var environmentName = args.LastOrDefault() == "dev" ? "Development" : Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
 
 var host = Host.CreateDefaultBuilder(args)
                .UseEnvironment(environmentName ?? "Production")

@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "Watcher.Master": {
+      "commandName": "Project",
+      "commandLineArgs": "Ping",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}
