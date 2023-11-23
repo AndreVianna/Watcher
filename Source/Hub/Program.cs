@@ -25,7 +25,7 @@ foreach (var workstation in workstations) {
     try {
         // Attempt to connect to the daemon
         var server = workstation.CreateServer(configuration, serviceProvider.GetRequiredService<ILoggerFactory>());
-        await server.Send(Ensure.IsNotNull(workstation.Address), "Ping"u8.ToArray(), false, cts.Token);
+        await server.Send(Ensure.IsNotNull(workstation.Address), "Ping"u8.ToArray(), cts.Token);
         Console.WriteLine($"Connected to {workstation.Name} successfully.");
     }
     catch (Exception ex) {

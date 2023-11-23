@@ -2,16 +2,16 @@
 
 public sealed class RemoteDataServer : IRemoteDataServer {
     private readonly ILogger<RemoteDataServer> _logger;
-    private readonly HashSet<IPEndPoint> _connectedClients = new();
 
     private readonly IPEndPoint _localTcpEndPoint;
-    private TcpListener? _tcpListener;
+    private readonly TcpListener _tcpListener;
 
     private readonly IPEndPoint _localUdpEndPoint;
-    private UdpClient? _udpClient;
+    private readonly UdpClient _udpClient;
 
-    private CancellationTokenSource _serverControl = new();
-    private CancellationTokenSource _streamingControl = new();
+    private readonly CancellationTokenSource _serverControl = new();
+    private CancellationTokenSource _listeningControl = default!;
+    private CancellationTokenSource _streamingControl = default!;
 
     public event AsyncEventHandler<ServerEventArgs>? OnServerStarted;
     public event AsyncEventHandler<ClientEventArgs>? OnClientConnected; // Happens only for TCP
@@ -27,15 +27,19 @@ public sealed class RemoteDataServer : IRemoteDataServer {
 
     public RemoteDataServer(IConfiguration configuration, ILoggerFactory loggerFactory) {
         _logger = loggerFactory.CreateLogger<RemoteDataServer>();
-        var tcpAddress = Ensure.IsNotNull(configuration["RemoteDataServer:TcpEndpoint:Address"]);
-        _localTcpEndPoint = IPEndPoint.Parse(tcpAddress);
         var udpAddress = Ensure.IsNotNull(configuration["RemoteDataServer:UdpEndpoint:Address"]);
         _localUdpEndPoint = IPEndPoint.Parse(udpAddress);
+        _udpClient = new(_localUdpEndPoint);
+        var tcpAddress = Ensure.IsNotNull(configuration["RemoteDataServer:TcpEndpoint:Address"]);
+        _localTcpEndPoint = IPEndPoint.Parse(tcpAddress);
+        _tcpListener = new(_localTcpEndPoint);
+        StartServer();
     }
 
     public void Dispose() {
         StopServer();
         ClearEvents();
+        _udpClient.Dispose();
     }
 
     private void ClearEvents() {
@@ -49,105 +53,75 @@ public sealed class RemoteDataServer : IRemoteDataServer {
     }
 
     public bool IsRunning { get; private set; }
-    public async Task Start(CancellationToken ct) {
+
+    public void StartListening() {
         try {
-            if (IsRunning) return;
-            _serverControl = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            StartServer();
-            IsRunning = true;
-            while (!_serverControl.IsCancellationRequested) {
-                var client = await _tcpListener!.AcceptTcpClientAsync(_serverControl.Token);
-                ProcessClientMessage(client).FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex);
-            }
+            _listeningControl = CancellationTokenSource.CreateLinkedTokenSource(_serverControl.Token);
+            Task.Run(async () => {
+                _tcpListener.Start();
+                while (!_listeningControl.IsCancellationRequested) {
+                    using var client = await _tcpListener.AcceptTcpClientAsync(_listeningControl.Token);
+                    await ProcessClientMessage(client);
+                }
+            }, _listeningControl.Token)
+                .FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex);
         }
         catch (OperationCanceledException) {
-            _logger.LogDebug("Listening at {ServerAddress} has stopped.", _tcpListener!.Server.LocalEndPoint);
+            _logger.LogDebug("Listening at {ServerAddress} has stopped.", _tcpListener.Server.LocalEndPoint);
         }
         catch (Exception ex) {
-            _logger.LogError(ex, "Error occurred while listening at {ServerAddress}...", _tcpListener!.Server.LocalEndPoint);
-            StopServer();
+            _logger.LogError(ex, "Error occurred while listening at {ServerAddress}.", _tcpListener.Server.LocalEndPoint);
             throw;
         }
         finally {
             IsRunning = false;
-            CallAsyncEvents(OnServerStopped, _serverControl)
-               .FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex); ;
-            _logger.LogDebug("Listening at {ServerAddress} stopped.", _tcpListener!.Server.LocalEndPoint);
+            CallAsyncEvents(OnServerStopped, _listeningControl).FireAndForget();
+            _logger.LogDebug("Listening at {ServerAddress} stopped.", _tcpListener.Server.LocalEndPoint);
         }
     }
 
-    private async Task ProcessClientMessage(TcpClient remoteClient) {
-        var remoteAddress = IPEndPoint.Parse(remoteClient.Client.RemoteEndPoint!.Serialize().ToString());
+    public void StopListening() {
+        if (!IsRunning) return;
+        _listeningControl.Cancel();
+        _listeningControl = default!;
+    }
+
+    public async Task Broadcast<TData>(IEnumerable<IPEndPoint> remoteAddresses, TData data, CancellationToken ct)
+        where TData : notnull {
         try {
-            _connectedClients.Add(remoteAddress);
-            _logger.LogDebug("Client connected from {RemoteAddress}.", remoteAddress);
-            var clientDetails = new ClientEventArgs {
-                AssuredEndPoint = remoteAddress,
-            };
-            CallAsyncEvents(OnClientConnected, clientDetails, _serverControl)
-               .FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex); ;
-            await using var stream = remoteClient.GetStream();
-            var receivingControl = CancellationTokenSource.CreateLinkedTokenSource(_serverControl.Token);
-            while (!receivingControl.IsCancellationRequested) {
-                if (!stream.DataAvailable) continue;
-                var buffer = new byte[remoteClient.Available];
-                var size = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), receivingControl.Token);
-                var streamDetails = new StreamEventArgs {
-                    EndPoint = remoteAddress,
-                    Type = StreamType.Assured,
-                    Content = buffer[..size],
-                    IsEndOfData = !stream.DataAvailable,
-                };
-                CallAsyncEvents(OnDataChunkReceived, streamDetails, receivingControl)
-                    .FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex);
-            }
-            _connectedClients.Remove(remoteAddress);
-            CallAsyncEvents(OnClientDisconnected, clientDetails, _serverControl)
-               .FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex); ;
+            await Task.WhenAll(remoteAddresses.Select(ra => Send(ra, data, ct)));
         }
         catch (OperationCanceledException) {
-            _logger.LogDebug("Receiving data from {RemoteAddress} has stopped.", remoteAddress);
+            _logger.LogDebug("Broadcasting was canceled.");
         }
         catch (Exception ex) {
-            _logger.LogError(ex, "Error occurred while receiving data from {RemoteAddress}...", remoteAddress);
-        }
-        finally {
-            remoteClient.Dispose();
+            _logger.LogError(ex, "Error occurred while broadcasting.");
+            throw;
         }
     }
 
-    public void Stop() {
-        if (!IsRunning) return;
-        _serverControl.Cancel();
-    }
-
-    public async Task Send<TData>(IPEndPoint remoteAddress, TData data, bool stopServerOnError, CancellationToken ct)
+    public async Task Send<TData>(IPEndPoint remoteAddress, TData data, CancellationToken ct)
         where TData : notnull {
         try {
             _logger.LogDebug("Sending data to {RemoteAddress}...", remoteAddress);
-            var sendDataControl = CancellationTokenSource.CreateLinkedTokenSource(_serverControl.Token, ct);
-            using var client = new UdpClient();
             var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data));
-            await client.SendAsync(bytes.AsMemory(), sendDataControl.Token);
+            await _udpClient.SendAsync(bytes.AsMemory(), _serverControl.Token);
             var eventArgs = new MessageEventArgs {
                 EndPoint = remoteAddress,
                 Content = data,
             };
-            CallAsyncEvents(OnMessageSent, eventArgs, sendDataControl)
-               .FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex);
+            CallAsyncEvents(OnMessageSent, eventArgs, _serverControl).FireAndForget();
         }
         catch (OperationCanceledException) {
             _logger.LogDebug("Sending data to {RemoteAddress} was canceled.", remoteAddress);
         }
         catch (Exception ex) {
-            _logger.LogError(ex, "Error occurred while sending data to {RemoteAddress}...", remoteAddress);
-            if (!stopServerOnError)
-                StopServer();
+            _logger.LogError(ex, "Error occurred while sending data to {RemoteAddress}.", remoteAddress);
             throw;
         }
     }
 
-    public async Task<TResponse?> Request<TRequest, TResponse>(IPEndPoint remoteAddress, TRequest request, bool stopServerOnError, CancellationToken ct)
+    public async Task<TResponse?> Request<TRequest, TResponse>(IPEndPoint remoteAddress, TRequest request, CancellationToken ct)
         where TRequest : notnull {
         try {
             _logger.LogDebug("Sending request to {RemoteAddress}...", remoteAddress);
@@ -161,15 +135,16 @@ public sealed class RemoteDataServer : IRemoteDataServer {
                 EndPoint = remoteAddress,
                 Content = request,
             };
-            CallAsyncEvents(OnRequestSent, eventArgs, requestControl)
-               .FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex);
+            CallAsyncEvents(OnRequestSent, eventArgs, requestControl).FireAndForget();
             _logger.LogDebug("Data sent to {RemoteAddress}.", remoteAddress);
+            while (client.Available == 0 && !requestControl.IsCancellationRequested) {
+                await Task.Delay(1, requestControl.Token);
+            }
             var response = await JsonSerializer.DeserializeAsync<TResponse>(stream, cancellationToken: requestControl.Token);
             eventArgs = eventArgs with {
                 Content = response,
             };
-            CallAsyncEvents(OnResponseReceived, eventArgs, requestControl)
-               .FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex);
+            CallAsyncEvents(OnResponseReceived, eventArgs, requestControl).FireAndForget();
             return response;
         }
         catch (OperationCanceledException) {
@@ -178,39 +153,61 @@ public sealed class RemoteDataServer : IRemoteDataServer {
         }
         catch (Exception ex) {
             _logger.LogError(ex, "Error occurred while sending data to {RemoteAddress}...", remoteAddress);
-            if (!stopServerOnError)
-                StopServer();
             throw;
         }
     }
 
     public bool IsStreaming { get; private set; }
-    public async Task StartStreaming<TContent>(IPEndPoint remoteAddress, StreamType streamType, Func<CancellationToken, Task<StreamData<TContent>>> getData, bool stopServerOnError, CancellationToken ct) {
+    public void StartStreaming<TContent>(IPEndPoint remoteAddress, StreamType streamType, Func<CancellationToken, Task<StreamData<TContent>>> getData) {
         try {
             if (IsStreaming) return;
             IsStreaming = true;
-            _streamingControl = CancellationTokenSource.CreateLinkedTokenSource(_serverControl.Token, ct);
+            _streamingControl = CancellationTokenSource.CreateLinkedTokenSource(_serverControl.Token);
             _logger.LogDebug("Start streaming data to {RemoteAddress}...", remoteAddress);
-            if (streamType == StreamType.Assured)
-                await StreamUsingTcp(remoteAddress, getData);
-            else
-                await StreamUsingUdp(remoteAddress, getData);
+            if (streamType == StreamType.Assured) {
+                StreamUsingTcp(remoteAddress, getData)
+                   .FireAndForget(onCancel: ex => throw ex,
+                                  onException: ex => throw ex);
+            }
+            else {
+                StreamUsingUdp(remoteAddress, getData)
+                   .FireAndForget(onCancel: ex => throw ex,
+                                  onException: ex => throw ex);
+            }
+            CallAsyncEvents(OnStreamingStopped, _streamingControl).FireAndForget();
+            _logger.LogDebug("Streaming data to {RemoteAddress} stopped.", remoteAddress);
         }
         catch (OperationCanceledException) {
             _logger.LogDebug("Streaming data to {RemoteAddress} was canceled.", remoteAddress);
         }
         catch (Exception ex) {
-            _logger.LogError(ex, "Error occurred while streaming data to {RemoteAddress}...", remoteAddress);
-            if (stopServerOnError) {
-                StopServer();
-                throw;
-            }
+            _logger.LogError(ex, "Error occurred while streaming data to {RemoteAddress}.", remoteAddress);
+            throw;
         }
-        finally {
-            CallAsyncEvents(OnStreamingStopped, _streamingControl)
-               .FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex); ;
-            _logger.LogDebug("Streaming data to {RemoteAddress} stopped.", remoteAddress);
+    }
+
+    private async Task ProcessClientMessage(TcpClient remoteClient) {
+        var remoteAddress = IPEndPoint.Parse(remoteClient.Client.RemoteEndPoint!.Serialize().ToString());
+        _logger.LogDebug("Client connected from {RemoteAddress}.", remoteAddress);
+        var clientDetails = new ClientEventArgs {
+            AssuredEndPoint = remoteAddress,
+        };
+        CallAsyncEvents(OnClientConnected, clientDetails, _listeningControl).FireAndForget();
+        await using var stream = remoteClient.GetStream();
+        var receivingControl = CancellationTokenSource.CreateLinkedTokenSource(_listeningControl.Token);
+        while (!receivingControl.IsCancellationRequested) {
+            if (!stream.DataAvailable) continue;
+            var buffer = new byte[remoteClient.Available];
+            var size = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), receivingControl.Token);
+            var streamDetails = new StreamEventArgs {
+                EndPoint = remoteAddress,
+                Type = StreamType.Assured,
+                Content = buffer[..size],
+                IsEndOfData = !stream.DataAvailable,
+            };
+            CallAsyncEvents(OnDataChunkReceived, streamDetails, receivingControl).FireAndForget(onCancel: ex => throw ex);
         }
+        CallAsyncEvents(OnClientDisconnected, clientDetails, _serverControl).FireAndForget();
     }
 
     private async Task StreamUsingTcp<TContent>(IPEndPoint remoteAddress, Func<CancellationToken, Task<StreamData<TContent>>> getData) {
@@ -223,7 +220,7 @@ public sealed class RemoteDataServer : IRemoteDataServer {
             IsEndOfData = false,
         };
         CallAsyncEvents(OnStreamingStarted, details, _streamingControl)
-           .FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex); ;
+           .FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex);
         await using var stream = client.GetStream();
         while (!_streamingControl.IsCancellationRequested) {
             var chunk = await getData(_streamingControl.Token);
@@ -237,15 +234,13 @@ public sealed class RemoteDataServer : IRemoteDataServer {
                 IsEndOfData = chunk.IsEndOfData,
             };
             CallAsyncEvents(OnDataChunkSent, chunkDetails, _streamingControl)
-               .FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex); ;
+               .FireAndForget(onCancel: ex => throw ex);
             if (chunk.IsEndOfData) break;
         }
-        CallAsyncEvents(OnStreamingStopped, _serverControl)
-           .FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex); ;
+        CallAsyncEvents(OnStreamingStopped, _serverControl).FireAndForget();
     }
 
     private async Task StreamUsingUdp<TContent>(IPEndPoint remoteAddress, Func<CancellationToken, Task<StreamData<TContent>>> getData) {
-        using var client = new UdpClient();
         var details = new StreamEventArgs {
             EndPoint = remoteAddress,
             Type = StreamType.Fast,
@@ -253,53 +248,53 @@ public sealed class RemoteDataServer : IRemoteDataServer {
             IsEndOfData = false,
         };
         CallAsyncEvents(OnStreamingStarted, details, _streamingControl)
-           .FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex); ;
+           .FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex);
         while (!_streamingControl.IsCancellationRequested) {
             var chunk = await getData(_streamingControl.Token);
             var data = chunk.Content switch {
                 byte[] bytes => bytes.AsMemory(),
                 _ => Encoding.UTF8.GetBytes(JsonSerializer.Serialize(chunk.Content)).AsMemory(),
             };
-            await client.SendAsync(data, _streamingControl.Token);
+            await _udpClient.SendAsync(data, _streamingControl.Token);
             var chunkDetails = details with {
                 Content = chunk.Content,
                 IsEndOfData = chunk.IsEndOfData,
             };
             CallAsyncEvents(OnDataChunkSent, chunkDetails, _streamingControl)
-               .FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex); ;
+               .FireAndForget(onCancel: ex => throw ex);
             if (chunk.IsEndOfData) break;
         }
-        CallAsyncEvents(OnStreamingStopped, _serverControl)
-           .FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex); ;
+        CallAsyncEvents(OnStreamingStopped, _serverControl).FireAndForget();
     }
 
     public void StopStreaming() {
         if (!IsStreaming) return;
         _streamingControl.Cancel();
+        _streamingControl = default!;
         IsStreaming = false;
     }
 
     private void StartServer() {
+        if (IsRunning) return;
         _logger.LogDebug("Starting server...");
-        _udpClient = new(_localTcpEndPoint);
-        _tcpListener = new(_localTcpEndPoint);
-        _tcpListener.Start();
+        _listeningControl = new();
         var details = new ServerEventArgs {
             AssuredEndPoint = _localTcpEndPoint,
             FastEndPoint = _localUdpEndPoint,
         };
-        CallAsyncEvents(OnServerStarted, details, _serverControl)
-           .FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex);
+        CallAsyncEvents(OnServerStarted, details, _serverControl).FireAndForget();
+        IsRunning = true;
         _logger.LogDebug("Server started.");
     }
 
     private void StopServer() {
+        if (!IsRunning) return;
         _logger.LogDebug("Stopping server...");
-        StopStreaming();
-        Stop();
-        _tcpListener!.Stop();
-        CallAsyncEvents(OnServerStopped, _serverControl)
-           .FireAndForget(onCancel: ex => throw ex, onException: ex => throw ex); ;
+        _streamingControl.Cancel();
+        _listeningControl.Cancel();
+        _tcpListener.Stop();
+        IsRunning = false;
+        CallAsyncEvents(OnServerStopped, _listeningControl).FireAndForget();
         _logger.LogDebug("Server stopped.");
     }
 

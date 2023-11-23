@@ -20,6 +20,6 @@ internal class PingCommand : Command<PingCommand> {
         var address = IsNotNull(configuration["Watcher:Address"]);
         var port = Convert.ToInt32(IsNotNull(configuration["Watcher:Port"]));
         var endPoint = new IPEndPoint(IPAddress.Parse(address), port);
-        return server.Send(endPoint, "Ping"u8.ToArray(), false, default);
+        return server.Send(endPoint, "Ping"u8.ToArray(), default);
     }
 }
