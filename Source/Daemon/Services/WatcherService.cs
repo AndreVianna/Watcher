@@ -67,7 +67,7 @@ public sealed class WatcherService : BackgroundService {
         });
     }
 
-    private Task ProcessRequest(StreamDetails args, CancellationTokenSource cts) {
+    private Task ProcessRequest(StreamEventArgs args, CancellationTokenSource cts) {
         var message = UTF8.GetString((byte[])(args.Content!)).Trim().ToLower();
         switch (message) {
             case "start":
