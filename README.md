@@ -14,7 +14,7 @@ WATCHER is a comprehensive, centralized application designed to manage and monit
 **System Modules Description:**
 
 1. **Workstation Registration Module:**
-   - **Functionality**: Facilitates the registration and initial setup of workstations within the WATCH system.
+   - **Functionality**: Facilitates the registration and initial setup of workstations within the WATCHER system.
    - **Key Features**: Secure token exchange, workstation identification, and establishment of bi-directional communication channels.
    - **Technology Stack**: C# WebSocket Client, NodeJS Server Component.
 
@@ -53,8 +53,10 @@ WATCHER is a comprehensive, centralized application designed to manage and monit
    - **Key Features**: Automatic logging, searchable logs, compliance and security auditing.
    - **Technology Stack**: Log Collection Tools, Auditing Software.
 
-**[Implementation Strategy](Strategy.md)**
+ - **[Implementation Strategy](Strategy.md)**
+
+ - **[Remote Data Server](RemoteDataServer.md)**
 
 **Conclusion:**
-The WATCH system represents a significant advancement in network management technology, promising enhanced control, efficiency, and insight into the workings of workstation networks. Its modular architecture ensures flexibility and future-proofing, making it an invaluable asset for any organization looking to streamline its IT operations.
+The WATCHER system represents a significant advancement in network management technology, promising enhanced control, efficiency, and insight into the workings of workstation networks. Its modular architecture ensures flexibility and future-proofing, making it an invaluable asset for any organization looking to streamline its IT operations.
 

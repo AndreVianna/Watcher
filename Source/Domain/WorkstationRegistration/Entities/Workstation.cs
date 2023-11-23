@@ -5,6 +5,6 @@ public record Workstation : IEntity, IWorkstation {
     public required string Name { get; init; }
     public string? Address { get; init; }
 
-    public ITcpServer CreateServer(ILoggerFactory loggerFactory)
-        => new TcpServer(loggerFactory);
+    public IRemoteDataServer CreateServer(IConfiguration configuration, ILoggerFactory loggerFactory)
+        => new RemoteDataServer(configuration, loggerFactory);
 }

@@ -1,4 +1,6 @@
-﻿var builder = new ConfigurationBuilder()
+﻿using DotNetToolbox;
+
+var builder = new ConfigurationBuilder()
    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
 var configuration = builder.Build();
 
@@ -22,9 +24,8 @@ var cts = new CancellationTokenSource();
 foreach (var workstation in workstations) {
     try {
         // Attempt to connect to the daemon
-        if (string.IsNullOrWhiteSpace(workstation.Address)) continue;
-        var server = workstation.CreateServer(serviceProvider.GetRequiredService<ILoggerFactory>());
-        await server.Send(workstation.Address, "Ping"u8.ToArray(), false, cts.Token);
+        var server = workstation.CreateServer(configuration, serviceProvider.GetRequiredService<ILoggerFactory>());
+        await server.Send(Ensure.IsNotNull(workstation.Address), "Ping"u8.ToArray(), false, cts.Token);
         Console.WriteLine($"Connected to {workstation.Name} successfully.");
     }
     catch (Exception ex) {

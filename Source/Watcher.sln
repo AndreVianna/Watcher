@@ -10,6 +10,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		.editorconfig = .editorconfig
 		.runsettings = .runsettings
 		..\README.md = ..\README.md
+		..\RemoteDataServer.md = ..\RemoteDataServer.md
 		..\Strategy.md = ..\Strategy.md
 	EndProjectSection
 EndProject
@@ -23,7 +24,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Watcher.Master.UnitTests", 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Watcher.Domain.UnitTests", "Domain.UnitTests\Watcher.Domain.UnitTests.csproj", "{2F14D86B-070F-4BAA-9876-96EB68B8EF64}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Watcher.Hub", "Hub\Watcher.Hub.csproj", "{AFC06C0C-9045-479A-BE46-6A8734DCEA0A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Watcher.Hub", "Hub\Watcher.Hub.csproj", "{AFC06C0C-9045-479A-BE46-6A8734DCEA0A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

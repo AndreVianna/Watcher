@@ -1,14 +1,16 @@
-﻿namespace Watcher.Daemon.Services;
+﻿using System.Net;
+
+namespace Watcher.Daemon.Services;
 
 public sealed class WatcherService : BackgroundService {
     private readonly ILogger<WatcherService> _logger;
     private readonly IConfiguration _configuration;
-    private readonly ITcpServer _tcpServer;
+    private readonly IRemoteDataServer _tcpServer;
 
     private bool _isDisposed;
     private CancellationTokenSource? _cts;
 
-    public WatcherService(IConfiguration configuration, ITcpServer tcpServer, ILoggerFactory loggerFactory) {
+    public WatcherService(IConfiguration configuration, IRemoteDataServer tcpServer, ILoggerFactory loggerFactory) {
         _logger = loggerFactory.CreateLogger<WatcherService>();
         _configuration = configuration;
         _tcpServer = tcpServer;
@@ -26,7 +28,7 @@ public sealed class WatcherService : BackgroundService {
         _cts?.Cancel();
         _cts = null;
 
-        _tcpServer.StopListening();
+        _tcpServer.Stop();
         _logger.LogDebug("Service has stopped.");
     }
 
@@ -34,9 +36,10 @@ public sealed class WatcherService : BackgroundService {
         try {
             _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             _logger.LogDebug("Service is starting.");
-            var serverAddress = IsNotNullOrWhiteSpace(_configuration["Watcher:BaseAddress"]);
-            _tcpServer.OnDataReceived += ProcessRequest;
-            _tcpServer.StartListening(serverAddress, true, _cts.Token).FireAndForget(ex => throw ex, ex => throw ex);
+            var serverAddress = IsNotNullOrWhiteSpace(_configuration["Watcher:Address"]);
+            var serverPort = System.Convert.ToInt32(IsNotNullOrWhiteSpace(_configuration["Watcher:Port"]));
+            _tcpServer.OnDataChunkReceived += ProcessRequest;
+            _tcpServer.Start(_cts.Token).FireAndForget(ex => throw ex, ex => throw ex);
             while (!_cts.IsCancellationRequested) {
                 await Task.Delay(100, _cts.Token);
             }
@@ -56,19 +59,19 @@ public sealed class WatcherService : BackgroundService {
     }
 
     private uint _counter = 1;
-    private Task<DataBlock> GenerateData(CancellationToken _) {
+    private Task<StreamData<byte[]>> GenerateData(CancellationToken _) {
         _counter = _counter == 31 ? 0 : _counter++;
-        return Task.FromResult(new DataBlock {
-            Bytes = "."u8.ToArray(),
+        return Task.FromResult(new StreamData<byte[]> {
+            Content = "."u8.ToArray(),
             IsEndOfData = _counter == 0,
         });
     }
 
-    private Task ProcessRequest((string RemoteAddress, DataBlock Data) args, CancellationTokenSource cts) {
-        var message = UTF8.GetString(args.Data.Bytes.ToArray()).Trim().ToLower();
+    private Task ProcessRequest(StreamDetails args, CancellationTokenSource cts) {
+        var message = UTF8.GetString((byte[])(args.Content!)).Trim().ToLower();
         switch (message) {
             case "start":
-                _tcpServer.StartStreaming(args.RemoteAddress, GenerateData, false, cts.Token).FireAndForget(onException: (_, ex) => throw ex);
+                _tcpServer.StartStreaming(args.EndPoint, StreamType.Assured, GenerateData, false, cts.Token).FireAndForget(onException: (_, ex) => throw ex);
                 return Task.CompletedTask;
             case "stop":
                 _tcpServer.StopStreaming();

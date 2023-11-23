@@ -11,7 +11,7 @@ var host = Host.CreateDefaultBuilder(args)
                })
                .ConfigureServices((context, services) => {
                    services.AddSingleton(context.Configuration);
-                   services.AddSingleton<ITcpServer, TcpServer>();
+                   services.AddSingleton<IRemoteDataServer, RemoteDataServer>();
                    services.AddLogging();
                    services.AddHostedService<WatcherService>();
                })

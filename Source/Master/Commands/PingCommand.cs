@@ -12,7 +12,7 @@ internal class PingCommand : Command<PingCommand> {
     }
 
     private Task Execute() {
-        var server = new TcpServer(_services.GetRequiredService<ILoggerFactory>());
+        var server = new RemoteDataServer(_services.GetRequiredService<ILoggerFactory>());
         var configuration = _services.GetRequiredService<IConfiguration>();
         var address = IsNotNull(configuration["Watcher:BaseAddress"]);
         return server.SendData(address, "Ping"u8.ToArray(), false, default);
