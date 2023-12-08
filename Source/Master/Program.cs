@@ -1,19 +1,14 @@
-﻿var environmentName = args.LastOrDefault() == "dev" ? "Development" : Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+﻿using Watcher.Caller.Commands;
 
 var builder = new ConfigurationBuilder()
-    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-    .AddJsonFile($"appsettings.{environmentName}.json", optional: true, reloadOnChange: true);
+             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
 var configuration = builder.Build();
-
-Log.Logger = new LoggerConfiguration()
-            .ReadFrom.Configuration(configuration)
-            .CreateLogger();
 
 var services = new ServiceCollection();
 services.AddSingleton<IConfiguration>(configuration);
 services.AddSingleton<ILoggerFactory, LoggerFactory>();
-services.AddSingleton<IWorkstationManagementService, WorkstationManagementService>();
-services.AddLogging(conf => conf.AddSerilog(Log.Logger));
+services.AddSingleton<ClientWebSocket>();
+services.AddLogging();
 
 var serviceProvider = services.BuildServiceProvider();
 

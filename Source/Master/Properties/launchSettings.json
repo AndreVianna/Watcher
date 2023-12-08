@@ -1,11 +1,8 @@
 {
   "profiles": {
-    "Watcher.Master": {
+    "Trigger": {
       "commandName": "Project",
-      "commandLineArgs": "Ping",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
+      "commandLineArgs": "ping 7000"
     }
   }
 }

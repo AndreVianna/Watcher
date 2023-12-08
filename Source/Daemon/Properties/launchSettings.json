@@ -1,7 +1,8 @@
 {
   "profiles": {
-    "Watcher.Daemon": {
+    "Workstation": {
       "commandName": "Project",
+      "commandLineArgs": "6000",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }

@@ -4,7 +4,7 @@
     <TargetFramework>net7.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>Watcher.Daemon</RootNamespace>
+    <RootNamespace>DotnetToolbox.Net</RootNamespace>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
@@ -34,7 +34,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Daemon\Watcher.Daemon.csproj" />
+    <ProjectReference Include="..\Domain\DotnetToolbox.Net.csproj" />
   </ItemGroup>
 
 </Project>

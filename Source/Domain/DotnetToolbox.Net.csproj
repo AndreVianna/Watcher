@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>DotnetToolbox.Net</RootNamespace>
+    <PackageId>DotnetToolbox.Net</PackageId>
+    <Title>DotnetToolbox Net</Title>
+    <Version>7.0.1</Version>
+    <Authors>Andre Vianna</Authors>
+    <Company>D0tN3tC0d3r5</Company>
+    <PackageTags>DotNet;Net;Library;WebSockets;Tcp;Udp;</PackageTags>
+    <PackageProjectUrl>https://github.com/D0tN3tC0d3r5/DotNetToolbox</PackageProjectUrl>
+    <Description>DotnetToolbox.Net: A comprehensive utility library for communication over a network, and more.</Description>
+    <Copyright>© Andre Vianna 2023</Copyright>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageRequireLicenseAcceptance>False</PackageRequireLicenseAcceptance>
+    <PackageReleaseNotes>
+      v7.0.1-rc1:
+      - Release candidate based on .Net 7.0
+    </PackageReleaseNotes>
+    <Product>Idemia.Net</Product>
+    <PackageOutputPath>pkgs\$(Configuration)</PackageOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DotNetToolbox.Core" Version="7.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="$(AssemblyName).UnitTests" />
+  </ItemGroup>
+
+</Project>
